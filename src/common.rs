@@ -8,14 +8,39 @@ use figment::Figment;
 use figment::providers::{Format, Serialized, Toml};
 use percent_encoding::percent_decode;
 use prometheus::{IntCounter as Counter, IntGauge as Gauge, Opts, Registry, proto};
-use reqwest::Client;
+use reqwest::{Client, ClientBuilder};
 use serde::Deserialize;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use tokio::sync::mpsc::Sender;
 use url::Url;
 
 use crate::{Error, Result};
+
+/// Install rustls ring crypto provider once for reqwest rustls-no-provider.
+fn ensure_rustls_provider_installed() {
+    static INIT: OnceLock<()> = OnceLock::new();
+
+    INIT.get_or_init(|| {
+        if rustls::crypto::CryptoProvider::get_default().is_none() {
+            let _ = rustls::crypto::ring::default_provider().install_default();
+        }
+    });
+}
+
+/// [For testing purposes only] Create a reqwest client after ensuring the rustls provider is installed.
+/// In main program, directly run ensure_rustls_provider_installed() at startup.
+#[allow(dead_code)]
+pub fn new_reqwest_client() -> Client {
+    ensure_rustls_provider_installed();
+    Client::new()
+}
+
+#[allow(dead_code)]
+pub fn new_reqwest_client_builder() -> ClientBuilder {
+    ensure_rustls_provider_installed();
+    ClientBuilder::new()
+}
 
 /// A cache task.
 #[derive(Debug, Clone)]
